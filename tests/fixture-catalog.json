@@ -1,0 +1,19 @@
+{
+  "schema": "storeamo.catalog.v1",
+  "catalog_version": 1,
+  "brand": {"name":"DesarrollAMO","store_name":"StoreAMO","accent":"#67D2FF","accent_secondary":"#F16AB5","background":"#06101C"},
+  "apps": [
+    {
+      "id": "demo",
+      "name": "Demo",
+      "tagline": "Fixture",
+      "description": "Fixture de verificación",
+      "category": "Tests",
+      "featured": false,
+      "status": "development",
+      "supported_platforms": ["android", "windows"],
+      "repository": null,
+      "artifacts": []
+    }
+  ]
+}
