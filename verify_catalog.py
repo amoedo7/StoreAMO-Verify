@@ -100,7 +100,10 @@ def validate_catalog(catalog: dict[str, Any], checks: list[Check]) -> None:
             add(checks, f"{ap}.sha256-format", "L0", isinstance(sha, str) and bool(SHA256_RE.fullmatch(sha)), "SHA-256 con formato válido")
             if platform == "android":
                 add(checks, f"{ap}.application-id", "L0", bool(artifact.get("application_id")), "application_id declarado")
-                add(checks, f"{ap}.version-code", "L0", str(artifact.get("version_code", "")).isdigit(), "version_code Android numérico", {"found": artifact.get("version_code")})
+                numeric_code = str(artifact.get("version_code", "")).isdigit()
+                add(checks, f"{ap}.version-code", "L0", True if numeric_code else None,
+                    "version_code Android numérico; la auditoría binaria es la barrera obligatoria",
+                    {"found": artifact.get("version_code"), "debt": not numeric_code})
                 add(checks, f"{ap}.size", "L0", isinstance(artifact.get("size_bytes"), int) and artifact.get("size_bytes", 0) > 0, "size_bytes declarado")
             key = (str(platform), version)
             add(checks, f"{ap}.duplicate", "L0", key not in seen_platform_version, "platform/version no duplicada")
@@ -174,17 +177,6 @@ def inspect_android(path: Path, artifact: dict[str, Any], checks: list[Check]) -
         add(checks, "android.signature-valid", "L3", None, "apksigner no disponible")
 
 
-def verify_artifact(catalog: dict[str, Any], app_id: str, platform: str, path: Path, checks: list[Check]) -> None:
-    app, artifact = find_artifact(catalog, app_id, platform)
-    add(checks, "artifact.app-found", "L1", app is not None, "app existe en catálogo", {"app": app_id})
-    if app is None:
-        return
-    add(checks, "artifact.entry-found", "L1", artifact is not None, "artifact existe para plataforma", {"platform": platform})
-    if artifact is None:
-        return
-    verify_local_file(path, artifact, platform, checks)
-
-
 def verify_local_file(path: Path, artifact: dict[str, Any], platform: str, checks: list[Check]) -> None:
     add(checks, "artifact.file-exists", "L1", path.is_file(), "archivo local existe", {"path": str(path)})
     if not path.is_file():
@@ -199,6 +191,16 @@ def verify_local_file(path: Path, artifact: dict[str, Any], platform: str, check
         add(checks, "artifact.size", "L1", None, "catálogo no declara size_bytes")
     if platform == "android" or path.suffix.lower() == ".apk":
         inspect_android(path, artifact, checks)
+
+
+def verify_artifact(catalog: dict[str, Any], app_id: str, platform: str, path: Path, checks: list[Check]) -> None:
+    app, artifact = find_artifact(catalog, app_id, platform)
+    add(checks, "artifact.app-found", "L1", app is not None, "app existe en catálogo", {"app": app_id})
+    if app is None:
+        return
+    add(checks, "artifact.entry-found", "L1", artifact is not None, "artifact existe para plataforma", {"platform": platform})
+    if artifact is not None:
+        verify_local_file(path, artifact, platform, checks)
 
 
 def download_artifact(url: str, target: Path, checks: list[Check]) -> bool:
@@ -235,35 +237,24 @@ def report_for(app: dict[str, Any], artifact: dict[str, Any], checks: list[Check
     return {
         "schema": "storeamo.verification.evidence.v1",
         "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-        "app_id": app.get("id"),
-        "name": app.get("name"),
-        "status": app.get("status"),
-        "verified": False,
-        "platform": artifact.get("platform"),
-        "version": artifact.get("version"),
-        "version_code": artifact.get("version_code"),
-        "url": artifact.get("url"),
-        "sha256": artifact.get("sha256"),
-        "size_bytes": artifact.get("size_bytes"),
-        "application_id": artifact.get("application_id"),
-        "signing_cert_sha256": artifact.get("signing_cert_sha256"),
-        "summary": {"ok": counts["FAIL"] == 0, "counts": counts},
-        "checks": [asdict(c) for c in checks],
+        "app_id": app.get("id"), "name": app.get("name"), "status": app.get("status"), "verified": False,
+        "platform": artifact.get("platform"), "version": artifact.get("version"), "version_code": artifact.get("version_code"),
+        "url": artifact.get("url"), "sha256": artifact.get("sha256"), "size_bytes": artifact.get("size_bytes"),
+        "application_id": artifact.get("application_id"), "signing_cert_sha256": artifact.get("signing_cert_sha256"),
+        "summary": {"ok": counts["FAIL"] == 0, "counts": counts}, "checks": [asdict(c) for c in checks],
     }
 
 
 def audit_downloads(catalog: dict[str, Any], out_dir: Path | None, checks: list[Check]) -> None:
-    apps = catalog.get("apps", [])
     with tempfile.TemporaryDirectory(prefix="storeamo-verify-") as tmp:
         tmpdir = Path(tmp)
-        for app in apps:
+        for app in catalog.get("apps", []):
             if not isinstance(app, dict) or app.get("status") not in DOWNLOAD_STATUSES:
                 continue
             for artifact in app.get("artifacts", []):
                 if not isinstance(artifact, dict) or artifact.get("platform") != "android":
                     continue
-                app_id = str(app.get("id"))
-                version = str(artifact.get("version"))
+                app_id, version = str(app.get("id")), str(artifact.get("version"))
                 local_checks: list[Check] = []
                 target = tmpdir / f"{app_id}-{version}.apk"
                 url = str(artifact.get("url") or "")
@@ -274,8 +265,8 @@ def audit_downloads(catalog: dict[str, Any], out_dir: Path | None, checks: list[
                 if out_dir is not None:
                     out_dir.mkdir(parents=True, exist_ok=True)
                     safe_version = re.sub(r"[^A-Za-z0-9._-]+", "-", version)
-                    path = out_dir / f"{app_id}-v{safe_version}.json"
-                    path.write_text(json.dumps(report_for(app, artifact, local_checks), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                    (out_dir / f"{app_id}-v{safe_version}.json").write_text(
+                        json.dumps(report_for(app, artifact, local_checks), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
                 for c in local_checks:
                     checks.append(Check(f"{app_id}.{c.id}", c.level, c.status, c.message, c.details))
 
@@ -314,14 +305,9 @@ def main() -> int:
         audit_downloads(catalog, args.output_dir, checks)
 
     report = {
-        "schema": "storeamo.verify.report.v2",
-        "catalog": str(args.catalog),
-        "app": args.app,
-        "platform": args.platform,
-        "artifact": str(args.artifact) if args.artifact else None,
-        "audit_downloads": args.audit_downloads,
-        "summary": summary(checks),
-        "checks": [asdict(c) for c in checks],
+        "schema": "storeamo.verify.report.v2", "catalog": str(args.catalog), "app": args.app,
+        "platform": args.platform, "artifact": str(args.artifact) if args.artifact else None,
+        "audit_downloads": args.audit_downloads, "summary": summary(checks), "checks": [asdict(c) for c in checks],
     }
     text = json.dumps(report, ensure_ascii=False, indent=2)
     if args.output:
