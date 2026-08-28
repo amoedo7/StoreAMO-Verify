@@ -1,0 +1,60 @@
+{
+  "schema": "desarrollamo.amo.v1",
+  "amo_version": "1.0.0",
+  "id": "storeamo-verify",
+  "name": "StoreAMO-Verify",
+  "kind": "distribution-verifier",
+  "origin": "native",
+  "membership": "candidate",
+  "trust": "inspected",
+  "unit": {
+    "purpose": "Verificar evidencia reproducible de integridad, identidad, firma, permisos y CI antes de que una release de StoreAMO pueda considerarse verificada.",
+    "responsibility": "Producir controles y reportes de verificación sin firmar, publicar, instalar ni ejecutar artefactos.",
+    "owner": "human_responsible",
+    "capabilities": ["catalog-validation", "artifact-integrity", "android-identity", "signature-evidence", "verification-reporting"]
+  },
+  "model": {
+    "inherits": [],
+    "context": ["README.md", "verify_catalog.py", "tests/fixture-catalog.json", ".github/workflows/ci.yml"],
+    "rules": [
+      "Verificar evidencia no concede autoridad para publicar, firmar o instalar artefactos.",
+      "Una release sólo puede considerarse verificada cuando los controles declarados pasan y existe evidencia reproducible.",
+      "Los estados PASS, FAIL y SKIP deben conservar su significado; un check no ejecutado no puede presentarse como PASS.",
+      "La unidad no necesita ni debe contener claves privadas o tokens de publicación."
+    ]
+  },
+  "map": {
+    "parent": "raizamo",
+    "children": [],
+    "relations": [
+      {"type": "verifies", "target": "storeamo-catalog", "strength": "high"},
+      {"type": "supports", "target": "storeamo", "strength": "high"}
+    ],
+    "covers": ["verify_catalog.py", "tests/**", "scripts/**"]
+  },
+  "policy": {
+    "cross_domain_changes_require_external_gates": true,
+    "self_declared_pass_allowed": false
+  },
+  "provenance": {
+    "source_uri": "https://github.com/amoedo7/StoreAMO-Verify",
+    "source_type": "git-repository",
+    "source_ref": "main"
+  },
+  "health": {
+    "checks": [
+      {
+        "id": "storeamo-verify-autocheck",
+        "type": "command",
+        "command": "bash scripts/autocheck.sh",
+        "cwd": ".",
+        "timeout_seconds": 180,
+        "description": "Valida el contrato canónico y ejecuta las comprobaciones deterministas existentes del verificador."
+      }
+    ]
+  },
+  "evidence": {
+    "status": "inspected",
+    "refs": ["README.md", "verify_catalog.py", "tests/fixture-catalog.json", ".github/workflows/ci.yml", "scripts/autocheck.sh"]
+  }
+}
