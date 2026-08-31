@@ -15,7 +15,7 @@
   },
   "model": {
     "inherits": [],
-    "context": ["README.md", "verify_catalog.py", "tests/fixture-catalog.json", ".github/workflows/ci.yml"],
+    "context": ["README.md", "RECOVERY.md", "verify_catalog.py", "tests/fixture-catalog.json", ".github/workflows/ci.yml"],
     "rules": [
       "Verificar evidencia no concede autoridad para publicar, firmar o instalar artefactos.",
       "Una release sólo puede considerarse verificada cuando los controles declarados pasan y existe evidencia reproducible.",
@@ -55,6 +55,6 @@
   },
   "evidence": {
     "status": "inspected",
-    "refs": ["README.md", "verify_catalog.py", "tests/fixture-catalog.json", ".github/workflows/ci.yml", "scripts/autocheck.sh"]
+    "refs": ["README.md", "RECOVERY.md", "verify_catalog.py", "tests/fixture-catalog.json", ".github/workflows/ci.yml", "scripts/autocheck.sh"]
   }
 }
